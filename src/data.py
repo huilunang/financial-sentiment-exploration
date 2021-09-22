@@ -1,8 +1,9 @@
+import os
 import re
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-import os
+import numpy as np
 import pandas as pd
 import requests
 import yfinance as yf
@@ -38,8 +39,6 @@ def tweet_url(ticker: str, start_time: str, end_time: str):
     response = requests.get("https://api.twitter.com/2/tweets/search/recent",
                             params=payload, headers=token)
 
-    # print("This is res headers: ", response.headers)
-    # print("This is response: ", response.json())
     return response
 
 
@@ -74,9 +73,10 @@ def get_tweets(ticker: str):
                     Dataframe object
     """
     time = timedelta(hours=12)
-    dt_format = "%Y-%m-%dT%H:%M:%S.%fZ"
-    end_time = (datetime.utcnow() - timedelta(seconds=10)).isoformat() + "Z"
-    start_time = (datetime.strptime(end_time, dt_format) - time + timedelta(seconds=10)).isoformat() + "Z"
+    delay_time = timedelta(seconds=10)
+    iso_format = "%Y-%m-%dT%H:%M:%S.%fZ"
+    end_time = (datetime.utcnow() - delay_time).isoformat() + "Z"
+    start_time = (datetime.strptime(end_time, iso_format) - time + delay_time).isoformat() + "Z"
     df = pd.DataFrame()
     for _ in range(14):
         try:
@@ -91,11 +91,24 @@ def get_tweets(ticker: str):
             df = df.append(temp_df, ignore_index=True).sort_values(by=["created_at"])
         finally:
             end_time = start_time
-            start_time = (datetime.strptime(end_time, dt_format) - time).isoformat() + "Z"
+            start_time = (datetime.strptime(end_time, iso_format) - time).isoformat() + "Z"
+
+    # No tweets found
+    if df.empty:
+        utc_yesterday = date.today() - timedelta(days=1, hours=8)
+
+        df = pd.DataFrame({
+            "text": np.nan,
+            "score": np.nan,
+            "sentiment": np.nan,
+            "created_at": np.nan,
+            "date": [utc_yesterday if i == 0 else utc_yesterday - timedelta(i) for i in range(7)],
+        })
+
+        return df
 
     # Clean up datetime to date
-    date_func = lambda x: (datetime.strptime(x, dt_format).date())
-    df["date"] = df["created_at"].apply(date_func)
+    df["date"] = df["created_at"].apply(lambda x: (datetime.strptime(x, iso_format).date()))
     df['ticker'] = ticker
 
     return df.loc[:, ["tweet_id", "text", "created_at", "date", "author_id",
@@ -135,7 +148,12 @@ def get_tweets_sentiment(ticker: str):
         Return:
             Dataframe object
     """
-    tweets = get_tweets(ticker)
+    nword = re.compile(r"\W+")
+    tweets = get_tweets(nword.sub("", ticker))
+
+    if len(tweets.index) == 7:
+        return tweets
+
     ctweets = tweets["text"].apply(clean_tweets_sentiment)
     senti_scores = pd.DataFrame(ctweets.apply(lambda x: TextBlob(x).sentiment).to_list())
     tweets["score"] = senti_scores["polarity"].round(2)
@@ -144,7 +162,7 @@ def get_tweets_sentiment(ticker: str):
     df = tweets.loc[:, ["text", "score", "sentiment", "created_at", "date"]]
     df.drop_duplicates(subset=['text'], inplace=True)
     df.loc[:, "text"] = df["text"].apply(clean_tweets)
-    return df
+    return df.reset_index(drop=True)
 
 
 def get_stock(ticker: str):
@@ -158,6 +176,8 @@ def get_stock(ticker: str):
             Company information and close price of ticker
     """
     ticker_info = yf.Ticker(ticker)
+    if ticker_info.info.get("regularMarketPrice") is None:
+        return None, None
     data = yf.download(ticker, period="5d")
     data["date"] = data.index
     data.columns = ["open", "high", "low", "close", "adj_close", "volume", "date"]

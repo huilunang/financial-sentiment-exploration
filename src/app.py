@@ -70,7 +70,7 @@ def download_data(tweets):
         Return:
             Clickable link to download file
     """
-    csv = tweets.loc[:, tweets.columns != 'date'].to_csv(index=False)
+    csv = tweets.loc[:, tweets.columns != "date"].to_csv(index=False)
     b64 = base64.b64encode(csv.encode()).decode()
     custom_css = """
         <style>
@@ -101,28 +101,39 @@ def round_fig(num):
     To round number to 2dp
     """
     if num is None:
-        return 'None'
+        return "None"
     return str(round(num, 2))
 
 
-st.title("Sentiment on stocks")
+def company_name(info):
+    """
+    To get company name detail
+    """
+    if info.get("longName") is not None:
+        return stock_info.get("longName")
+    if info.get("shortName") is not None:
+        return info.get("shortName")
+    return "None"
+
+
+st.title("Financial Sentiment Exploration")
 st.write("A sentiment reader on twitter data to find out public opinion on the specific stock")
 input_ticker = st.text_input("Ticker", "MSFT", help="Enter a ticker!")
 stock_info, stock_data = get_stock(input_ticker)
 
-
-if stock_info.get("regularMarketPrice") is None:
+if stock_info is None:
     st.write(f"The ticker '{input_ticker}' does not exist.")
 else:
     tweets_data = load_data(input_ticker)
     chart = display_data(tweets_data, stock_data)
     with st.expander("Show ticker information"):
         c1, c2 = st.columns(2)
-        c1.text("Company: " + stock_info.get("longName"))
-        c1.text("Sector: " + stock_info.get("sector"))
+        c1.text("Company: " + company_name(stock_info))
+        c1.text("Sector: " + stock_info.get("sector", "None"))
         c1.text("Ytd's close price: " + round_fig(stock_info.get("previousClose")))
         c1.text("------------------------------------")
-        c1.text("Trailing annual dividend yield: " +round_fig(stock_info.get("trailingAnnualDividendYield")))
+        c1.text("Trailing annual dividend yield: " +
+                round_fig(stock_info.get("trailingAnnualDividendYield")))
         c1.caption("""Trailing annual dividend yield gives the dividend percentage
                     paid over a year. It represents the ratio of a company's
                     current annual dividend compared to its current share price. """)
@@ -142,8 +153,14 @@ else:
                     If a company drops or rises in value more than the index over a five-year
                     period, it has a higher beta. With beta > 1 would mean a higher risk -
                     and anything < 1 would mean a lower risk.""")
+        st.caption("NOTE: These ticker information are from Yahoo! Finance")
 
     st.plotly_chart(chart, use_container_width=True)
     with st.expander("Show raw data"):
-        st.markdown(download_data(tweets_data, input_ticker), unsafe_allow_html=True)
-        st.dataframe(tweets_data.loc[:, tweets_data.columns != 'date'])
+        if len(tweets_data.index) == 7:
+            tdf = tweets_data.iloc[0:0, 0:4]
+            st.markdown(download_data(tdf), unsafe_allow_html=True)
+            st.dataframe(tdf)
+        else:
+            st.markdown(download_data(tweets_data), unsafe_allow_html=True)
+            st.dataframe(tweets_data.loc[:, tweets_data.columns != "date"])
