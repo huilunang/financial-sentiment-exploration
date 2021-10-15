@@ -19,3 +19,16 @@ Therefore, if a tweet has a score close to 1, it would mean that the tweet is po
 3. Explore the data plotted
 > Scores tabulated for a day are average out by the number of tweets gathered for that corresponding day.
 4. Explore the raw data that is used
+
+Walkthrough: https://youtu.be/sOIRSD1MZks 
+
+## Challenges
+Much time was spent fiddling around with the Twitter API due to the different versions and constraints.
+
+## What I've learnt
+- Interacting with a new API
+- To do data preparation such as cleaning
+- Code documentation and deployment with Heroku
+
+## What's next
+- Looking to explore an intuitive method `(using Word2Vec)` to create the solution.
